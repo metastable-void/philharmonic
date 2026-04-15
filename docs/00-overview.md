@@ -230,10 +230,12 @@ the resulting services is the deployer's responsibility.
 ## Reading order for the rest of these docs
 
 - `01-principles.md` — design commitments shared across all subsystems.
-- `02-vocabulary.md` — the cornerstone crate's role and contents.
-- `03-storage.md` — storage substrate design in detail.
-- `04-execution.md` — execution substrate and the JS contract.
-- `05-workflow.md` — orchestration layer design.
-- `06-boundaries.md` — what each layer doesn't know about.
-- `07-deferred.md` — explicitly out-of-scope features and why.
-- `08-conventions.md` — workspace-wide practices (versioning, licensing).
+- `02-00-components.md` — concrete inventory of components and crates.
+- `02-01-cornerstone.md` — the cornerstone vocabulary crate.
+- `02-02-storage.md` — storage substrate design.
+- `02-03-execution.md` — execution substrate and JS contract.
+- `02-04-connectors.md` — connector layer and capability tokens.
+- `02-05-workflow.md` — orchestration layer design.
+- `03-boundaries.md` — what each layer doesn't know about.
+- `04-deferred.md` — explicitly out-of-scope features and why.
+- `05-conventions.md` — workspace-wide practices.
