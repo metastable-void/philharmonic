@@ -1,1 +1,5 @@
 /target
+/Cargo.lock
+.codex
+.DS_Store
+._*
