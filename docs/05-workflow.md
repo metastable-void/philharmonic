@@ -157,39 +157,122 @@ consistently.
 
 ## Status transitions
 
-The state machine is deliberately small. Five statuses, with
-allowed transitions:
+The state machine is small. Five statuses, with allowed
+transitions:
 
 ```
 Pending → Running   (first step starts)
-Running → Running   (subsequent steps succeed)
-Running → Completed (script signals completion)
-Running → Failed    (step errors, including malformed output)
 Pending → Cancelled (cancel before any step runs)
+Pending → Completed (caller marks complete before any step runs)
+Running → Running   (subsequent steps succeed without completion signal)
+Running → Completed (script signals completion or caller marks complete)
+Running → Failed    (step errors, including malformed output)
 Running → Cancelled (cancel during execution)
 ```
 
 Terminal states (Completed, Failed, Cancelled) have no outgoing
-transitions. Once an instance is terminal, no further revisions
-are appended. The substrate doesn't enforce this — it would
-happily let you append to a terminated instance — but the workflow
-engine refuses, returning a `WorkflowError::InstanceTerminal`.
+transitions. Once an instance reaches one, no further revisions
+are appended. The substrate would happily let you append to a
+terminated instance — the substrate doesn't know about workflow
+status — but the workflow engine refuses, returning a
+`WorkflowError::InstanceTerminal`.
 
-The "script signals completion" transition deserves explanation. A
-multi-step workflow needs some way for the script to say "I'm
-done." The simplest convention: the script's return value includes
-a `done: true` field at the top level of `output`, or sets a
-specific field in `context` that the engine inspects. The exact
-signal is a workflow-layer convention, not enforced by the script
-or the executor.
+The `Pending → Completed` transition is unusual but real: a caller
+might create an instance and immediately mark it complete without
+running any steps (perhaps because the work is already done by the
+time the instance is created, and the instance exists only as a
+record). The engine allows this for symmetry with `Pending →
+Cancelled`.
 
-For the first version, instances don't auto-transition to
-Completed. They stay in Running indefinitely until a caller
-explicitly marks them complete via an engine method, or until a
-step error takes them to Failed. Auto-completion based on
-script-level signaling can be added later if a use case demands it;
-the substrate already supports it (just append a revision with
-status: Completed).
+## Completion: how instances reach Completed
+
+An instance reaches `Completed` through one of two mechanisms.
+
+**Caller-driven: `complete()` engine method.**
+
+The engine exposes an explicit method for marking an instance
+complete:
+
+```rust
+pub async fn complete(
+    &self,
+    instance_id: EntityId<WorkflowInstance>,
+) -> Result<(), WorkflowError>;
+```
+
+The caller decides when an instance is done — by inspecting step
+outputs, by tracking external state, by some application-level
+convention — and calls `complete()` to transition the instance to
+Completed. The engine appends a revision with status: Completed,
+preserving the current context.
+
+This is the mechanically necessary primitive: there must be some
+way to mark instances complete, and the engine must provide it.
+It's symmetric with `cancel()`: both are caller-initiated terminal
+transitions, distinguished only by which terminal status results.
+
+**Script-driven: the `done` convention.**
+
+When a script's return value includes a `done: true` field at the
+top level (sibling to `context` and `output`), the engine
+interprets it as a completion signal:
+
+```javascript
+return {context: newContext, output: stepOutput, done: true};
+```
+
+After processing the step result normally — content-addressing the
+new context and output, creating the step record — the engine
+appends the next instance revision with status: Completed instead
+of status: Running. The step itself is recorded as a successful
+step (`outcome: Success`); the workflow's terminal state is the
+consequence.
+
+The `done` field is checked at the top level of the return value,
+not inside `output`. A script returning `{context, output: {done:
+true, result: "..."}}` does not complete the workflow — that
+`done` is part of the output, owned by whatever consumes the step
+output. Only the top-level `done` is interpreted by the engine.
+
+The `done` field is optional. Scripts that omit it (or set it to a
+falsy value) leave the instance in Running, expecting more steps
+or a caller-driven `complete()`. The convention is opt-in: scripts
+that don't know about it work fine.
+
+**Why both.**
+
+The two mechanisms cover different workflow shapes.
+
+Bounded workflows where the script knows its termination condition
+(processing a fixed list, iterating until convergence, running a
+known sequence of steps) use the `done` convention naturally. The
+script that produces the last step's output also signals "this was
+the last one." No external bookkeeping required.
+
+Externally-determined workflows where completion depends on
+information the script doesn't have (an external event,
+out-of-band cancellation by a different actor, a policy decision)
+use `complete()`. The caller that knows the workflow is done calls
+the method.
+
+Some workflows are mixed: most steps don't signal `done`, but the
+caller may decide to complete the workflow early based on
+out-of-band conditions. Both mechanisms working in parallel handle
+this without additional logic — whichever fires first transitions
+the instance.
+
+**Idempotency.**
+
+Calling `complete()` on an already-terminal instance returns
+`WorkflowError::InstanceTerminal`. Same as `cancel()`. Callers
+that don't track instance state can call `complete()` defensively
+and handle the error.
+
+A script returning `done: true` on an already-terminal instance
+can't happen in practice — the engine refuses to call the script
+on a terminal instance (rejecting `execute_step` with
+`InstanceTerminal` before reaching the executor). So the `done`
+case doesn't need explicit idempotency handling.
 
 ## Pinning vs latest references
 
@@ -232,7 +315,7 @@ steps against it, then read results." The engine is the API; it
 holds references to the storage substrate and the executor and
 coordinates them.
 
-```
+```rust
 pub struct WorkflowEngine<S, E> {
     store: S,
     executor: E,
@@ -256,6 +339,11 @@ where
         instance_id: EntityId<WorkflowInstance>,
         input: CanonicalJson,
     ) -> Result<StepResult, WorkflowError>;
+
+    pub async fn complete(
+        &self,
+        instance_id: EntityId<WorkflowInstance>,
+    ) -> Result<(), WorkflowError>;
 
     pub async fn cancel(
         &self,
@@ -310,10 +398,11 @@ are queryable for diagnosis, just not associated with a successful
 state transition). The caller can retry; the substrate's
 optimistic concurrency on revision sequences makes the retry safe.
 
-`cancel` appends a revision with status: Cancelled. No step is run;
-no executor call is made. Returns success if the instance is
-non-terminal, returns `InstanceTerminal` if it's already in a
-terminal state.
+`complete` and `cancel` are simpler. Each verifies the instance is
+non-terminal and appends a revision with the appropriate terminal
+status. Neither runs the script or invokes the executor; both
+preserve the current context. Returns `InstanceTerminal` if the
+instance is already in a terminal state.
 
 ## Result processing
 
@@ -345,10 +434,15 @@ Failed, and the caller can investigate why the script returned the
 wrong shape.
 
 **Script success with valid result.** The engine extracts `context`
-and `output` from the result. Content-addresses both. Creates a
-step record with the input, the output, `step_seq`, and `outcome:
-Success`. Appends an instance revision with the new context and
-status: Running.
+and `output` from the result, and inspects the optional top-level
+`done` field. Content-addresses the new context and the output.
+Creates a step record with the input, the output, `step_seq`, and
+`outcome: Success`. Appends an instance revision with the new
+context. The next status depends on `done`:
+
+- If `done` is present and truthy, the new revision's status is
+  Completed. The instance is now terminal.
+- Otherwise, the new revision's status is Running.
 
 The four outcomes are exhaustive. Every executor result lands in
 exactly one of these branches, and each branch produces a
@@ -360,7 +454,7 @@ The workflow engine reaches the executor through a trait, not a
 concrete HTTP client. This keeps the workflow crate transport-agnostic
 and testable without a running executor.
 
-```
+```rust
 #[async_trait]
 pub trait StepExecutor: Send + Sync {
     async fn execute(
@@ -418,13 +512,21 @@ For workflows that need to run multiple steps without external
 prompting (a pipeline that advances autonomously), the natural
 implementation is a loop in the caller's code:
 
-```
+```rust
 loop {
     let result = engine.execute_step(instance_id, input).await?;
-    if instance_terminal_after(result) { break; }
+    if result.is_terminal() { break; }
     input = compute_next_input(result);
 }
 ```
+
+The engine's `StepResult` includes the new status, so the loop can
+check for termination (Completed, Failed, or Cancelled) without an
+extra read. Workflows that complete via the `done` convention will
+exit the loop naturally on the step that signals completion;
+workflows that complete via external `complete()` calls will
+typically not use this loop shape (since the loop driver isn't the
+one calling `complete()`).
 
 Embedding this loop in the engine would require the engine to
 decide when to stop, which couples the engine to workflow-specific
@@ -432,9 +534,8 @@ completion semantics. Keeping it in the caller's code keeps the
 engine narrow.
 
 A future scheduler crate could provide auto-stepping for workflows
-that signal "advance me" via some convention (e.g., a `next_input`
-field in the step output). That belongs above the workflow crate,
-not inside it.
+that signal "advance me" via some convention. That belongs above
+the workflow crate, not inside it.
 
 ## What the workflow crate doesn't do
 
@@ -479,7 +580,7 @@ workflow lives in higher layers.
 The engine's two type parameters mean construction sites combine a
 storage backend and an executor:
 
-```
+```rust
 let pool = MySqlPool::connect(&database_url).await?;
 philharmonic_store_sqlx_mysql::migrate(&pool).await?;
 let store = SqlStore::from_pool(pool);
@@ -495,7 +596,7 @@ both are plug-ins.
 
 For tests:
 
-```
+```rust
 let store = MemStore::new();
 let executor = MockStepExecutor::with_responses(vec![...]);
 let engine = WorkflowEngine::new(store, executor);
@@ -516,7 +617,8 @@ them meaning:
   entity kinds with specific slot conventions.
 - The `context` / `args` / `input` JSON convention for what gets
   passed to scripts.
-- The `{context, output}` convention for what scripts return.
+- The `{context, output}` convention for what scripts return,
+  with the optional `done` field signaling workflow completion.
 - The status enum encoding lifecycle states.
 - The state-transition logic that turns script results into
   substrate revisions.
@@ -524,6 +626,10 @@ them meaning:
   that keeps references stable.
 - The error-handling logic that decides which substrate writes
   happen for which executor outcomes.
+- The completion model: explicit `complete()` for caller-driven
+  termination, the `done` field for script-driven termination,
+  both producing Completed-status revisions through the same
+  internal path.
 
 These are workflow concepts. They don't belong in the substrate
 (which would couple the substrate to one consumer's domain) and
