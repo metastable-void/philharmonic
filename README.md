@@ -1,6 +1,36 @@
 # philharmonic
 
-Work-in-progress meta crate for Philharmonic suite of automation orchestration engine.
+Philharmonic is a workflow orchestration system built as a family of
+Rust crates. This `philharmonic` crate is a placeholder — it reserves
+the name on crates.io and gives readers a starting point for finding
+the actual components. It does not re-export anything and has no
+runtime dependencies.
+
+## Current component crates
+
+- [`philharmonic-types`](https://crates.io/crates/philharmonic-types) —
+  cornerstone vocabulary: content-addressed JSON, phantom-typed UUID
+  identities, SHA-256 hashes, entity-kind declarations.
+- [`philharmonic-store`](https://crates.io/crates/philharmonic-store) —
+  storage substrate traits: content store, identity store, entity store.
+  Backend-agnostic.
+- `philharmonic-store-sqlx-mysql` — canonical storage implementation
+  against MySQL-family databases (in development).
+
+More crates will appear as the system is built out. See the repository
+for the current state.
+
+## Why is this crate empty?
+
+A workflow orchestration system is not one thing; it's several
+subsystems with distinct concerns (vocabulary, storage, JS execution,
+policy, API, connector routing). Publishing them as separate crates
+lets consumers depend only on what they need, keeps compile times
+reasonable, and lets each subsystem evolve at its own pace.
+
+The `philharmonic` name on crates.io will eventually become a
+convenience re-export crate that pulls in the common subset of the
+system. For now, it's reserved.
 
 ## License
 
