@@ -1,0 +1,10 @@
+[package]
+name = "philharmonic"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MPL-2.0"
+repository = "https://github.com/metastable-void/philharmonic"
+readme = "README.md"
+rust-version = "1.85"
+
+[dependencies]
