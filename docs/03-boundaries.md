@@ -365,10 +365,10 @@ The boundaries described here are covered from each layer's side
 in the per-layer documents. If you want the inside view of a
 specific layer, read its document:
 
-- Cornerstone: `02-vocabulary.md`
-- Storage: `03-storage.md`
-- Execution: `04-execution.md`
-- Workflow: `05-workflow.md`
+- Cornerstone: `02-01-cornerstone.md`
+- Storage: `02-02-storage.md`
+- Execution: `02-03-execution.md`
+- Workflow: `02-05-workflow.md`
 
 This document is the cross-cutting view. Use it when the question
 is "where does X belong?" — a feature, a method, a piece of
