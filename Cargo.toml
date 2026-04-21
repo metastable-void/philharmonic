@@ -7,7 +7,7 @@ description = "Philharmonic workflow orchestration system (meta-crate). The syst
 license = "Apache-2.0 OR MPL-2.0"
 repository = "https://github.com/metastable-void/philharmonic"
 readme = "README.md"
-rust-version = "1.85"
+rust-version = "1.88"
 
 keywords = ["philharmonic", "workflow", "orchestration"]
 categories = ["data-structures"]
