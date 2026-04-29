@@ -23,7 +23,7 @@ default = [
 ]
 
 # TLS support for bin targets (forwards to mechanics/https).
-https = ["mechanics/https"]
+https = ["mechanics/https", "dep:rustls-pemfile", "dep:tokio-rustls"]
 
 # --- Shipped connector implementations (default-on) ---
 connector-http-forward = ["dep:philharmonic-connector-impl-http-forward"]
@@ -39,10 +39,17 @@ connector-llm-gemini = ["dep:philharmonic-connector-impl-llm-gemini"]
 connector-email-smtp = ["dep:philharmonic-connector-impl-email-smtp"]
 
 [dependencies]
+axum = "0.8"
 clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+hyper-util = { version = "0.1", features = ["full"] }
+rustls-pemfile = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = { version = "0.26", optional = true }
 toml = "0.8"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+zeroize = { version = "1", features = ["derive"] }
 
 # Core vocabulary
 philharmonic-types = "0.3.5"
@@ -86,6 +93,10 @@ philharmonic-api = "0.1.0"
 [[bin]]
 name = "mechanics-worker"
 path = "src/bin/mechanics_worker/main.rs"
+
+[[bin]]
+name = "philharmonic-connector"
+path = "src/bin/philharmonic_connector/main.rs"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time"] }
