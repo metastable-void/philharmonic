@@ -3,7 +3,7 @@ name = "philharmonic"
 version = "0.0.0"
 edition = "2024"
 
-description = "Philharmonic workflow orchestration system (meta-crate). The system is published as a family of crates; this one is a placeholder and intentionally empty. See philharmonic-types and philharmonic-store for current components."
+description = "Philharmonic workflow orchestration system — meta-crate re-exporting the entire crate family. Depends on all published library crates; feature-gates connector implementations so consumers can pick individually with default-features = false."
 license = "Apache-2.0 OR MPL-2.0"
 repository = "https://github.com/metastable-void/philharmonic"
 readme = "README.md"
@@ -12,6 +12,71 @@ rust-version = "1.88"
 keywords = ["philharmonic", "workflow", "orchestration"]
 categories = ["data-structures"]
 
+[features]
+default = [
+    "connector-http-forward",
+    "connector-llm-openai-compat",
+    "connector-sql-postgres",
+    "connector-sql-mysql",
+    "connector-embed",
+    "connector-vector-search",
+]
+
+# TLS support for bin targets (forwards to mechanics/https).
+https = ["mechanics/https"]
+
+# --- Shipped connector implementations (default-on) ---
+connector-http-forward = ["dep:philharmonic-connector-impl-http-forward"]
+connector-llm-openai-compat = ["dep:philharmonic-connector-impl-llm-openai-compat"]
+connector-sql-postgres = ["dep:philharmonic-connector-impl-sql-postgres"]
+connector-sql-mysql = ["dep:philharmonic-connector-impl-sql-mysql"]
+connector-embed = ["dep:philharmonic-connector-impl-embed"]
+connector-vector-search = ["dep:philharmonic-connector-impl-vector-search"]
+
+# --- Unshipped connector implementations (off by default until 0.1.0) ---
+connector-llm-anthropic = ["dep:philharmonic-connector-impl-llm-anthropic"]
+connector-llm-gemini = ["dep:philharmonic-connector-impl-llm-gemini"]
+connector-email-smtp = ["dep:philharmonic-connector-impl-email-smtp"]
+
+[dependencies]
+# Core vocabulary
+philharmonic-types = "0.3.5"
+
+# Storage substrate
+philharmonic-store = "0.1.0"
+philharmonic-store-sqlx-mysql = "0.1.0"
+
+# Execution substrate
+mechanics-config = "0.1.0"
+mechanics-core = "0.3.0"
+mechanics = "0.3.0"
+
+# Policy and workflow
+philharmonic-policy = "0.2.0"
+philharmonic-workflow = "0.1.0"
+
+# Connector layer — always-on crates
+philharmonic-connector-common = "0.2.0"
+philharmonic-connector-client = "0.1.0"
+philharmonic-connector-router = "0.1.0"
+philharmonic-connector-service = "0.1.0"
+philharmonic-connector-impl-api = "0.1.0"
+
+# Connector implementations — feature-gated (shipped, default-on)
+philharmonic-connector-impl-http-forward = { version = "0.1.0", optional = true }
+philharmonic-connector-impl-llm-openai-compat = { version = "0.1.0", optional = true }
+philharmonic-connector-impl-sql-postgres = { version = "0.1.0", optional = true }
+philharmonic-connector-impl-sql-mysql = { version = "0.1.0", optional = true }
+philharmonic-connector-impl-embed = { version = "0.1.0", optional = true }
+philharmonic-connector-impl-vector-search = { version = "0.1.0", optional = true }
+
+# Connector implementations — feature-gated (unshipped, off by default)
+philharmonic-connector-impl-llm-anthropic = { version = "0.0.0", optional = true }
+philharmonic-connector-impl-llm-gemini = { version = "0.0.0", optional = true }
+philharmonic-connector-impl-email-smtp = { version = "0.0.0", optional = true }
+
+# API
+philharmonic-api = "0.1.0"
 
 [profile.release]
 opt-level = 3
