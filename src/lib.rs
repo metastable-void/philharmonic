@@ -59,3 +59,5 @@ pub use philharmonic_connector_impl_email_smtp as connector_impl_email_smtp;
 
 // API
 pub use philharmonic_api as api;
+
+pub mod server;
