@@ -94,10 +94,6 @@ philharmonic-api = "0.1.0"
 name = "mechanics-worker"
 path = "src/bin/mechanics_worker/main.rs"
 
-[[bin]]
-name = "philharmonic-connector"
-path = "src/bin/philharmonic_connector/main.rs"
-
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time"] }
 
