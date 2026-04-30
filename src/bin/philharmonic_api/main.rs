@@ -27,6 +27,7 @@ use zeroize::Zeroizing;
 
 mod config;
 mod scope;
+mod webui;
 
 use config::ApiConfig;
 use scope::HeaderBasedScopeResolver;
@@ -325,11 +326,18 @@ async fn dispatch_dynamic(
     State(state): State<DynamicRouter>,
     request: Request<Body>,
 ) -> Response<Body> {
-    let router = state.router.read().await.clone();
-    match router.oneshot(request).await {
-        Ok(response) => response,
-        Err(error) => match error {},
+    let is_api_path = request.uri().path().starts_with("/v1/")
+        || request.uri().path().starts_with("/connector/");
+
+    if is_api_path {
+        let router = state.router.read().await.clone();
+        return match router.oneshot(request).await {
+            Ok(response) => response,
+            Err(error) => match error {},
+        };
     }
+
+    webui::webui_fallback(request).await
 }
 
 async fn start_server(app: Router, config: &ApiConfig) -> Result<&'static str, String> {
