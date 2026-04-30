@@ -254,7 +254,7 @@ fn build_realm_private_key_registry(
             entry.kid.clone(),
             RealmPrivateKeyEntry {
                 kem_sk: Zeroizing::new(kem_sk),
-                ecdh_sk: StaticSecret::from(x25519_sk),
+                ecdh_sk: Zeroizing::new(StaticSecret::from(x25519_sk)),
                 realm: RealmId::new(entry.realm_id.clone()),
                 not_before: entry.not_before,
                 not_after: entry.not_after,
