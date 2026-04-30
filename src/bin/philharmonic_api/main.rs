@@ -544,10 +544,9 @@ fn read_tls_server_config(
         )
     })?;
 
-    let cert_chain: Vec<CertificateDer<'static>> =
-        CertificateDer::pem_slice_iter(&cert_bytes)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("failed to parse TLS certificate chain: {error}"))?;
+    let cert_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("failed to parse TLS certificate chain: {error}"))?;
     if cert_chain.is_empty() {
         return Err("failed to parse TLS certificate chain: no certificates found".to_string());
     }

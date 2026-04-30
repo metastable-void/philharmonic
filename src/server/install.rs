@@ -65,16 +65,13 @@ pub fn execute_install(plan: &InstallPlan) -> Result<(), String> {
 }
 
 fn ensure_root() -> Result<(), String> {
-    let output = Command::new("id")
-        .arg("-u")
-        .output()
-        .map_err(|error| {
-            if error.kind() == io::ErrorKind::NotFound {
-                "failed to check root privileges: id command not found".to_string()
-            } else {
-                format!("failed to check root privileges with id -u: {error}")
-            }
-        })?;
+    let output = Command::new("id").arg("-u").output().map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            "failed to check root privileges: id command not found".to_string()
+        } else {
+            format!("failed to check root privileges with id -u: {error}")
+        }
+    })?;
     if !output.status.success() {
         return Err(format!(
             "failed to check root privileges: id -u exited with status {}",
@@ -91,8 +88,8 @@ fn ensure_root() -> Result<(), String> {
 }
 
 fn copy_current_binary(bin_path: &Path) -> Result<(), String> {
-    let current_exe =
-        std::env::current_exe().map_err(|error| format!("failed to locate current binary: {error}"))?;
+    let current_exe = std::env::current_exe()
+        .map_err(|error| format!("failed to locate current binary: {error}"))?;
     fs::copy(&current_exe, bin_path).map_err(|error| {
         format!(
             "failed to copy binary from {} to {}: {error}",
@@ -128,8 +125,12 @@ fn write_unit_file(
     unit_path: &Path,
 ) -> Result<(), String> {
     let unit = systemd_unit_content(plan, bin_path, config_path);
-    fs::write(unit_path, unit)
-        .map_err(|error| format!("failed to write systemd unit {}: {error}", unit_path.display()))
+    fs::write(unit_path, unit).map_err(|error| {
+        format!(
+            "failed to write systemd unit {}: {error}",
+            unit_path.display()
+        )
+    })
 }
 
 fn systemd_unit_content(plan: &InstallPlan, bin_path: &Path, config_path: &Path) -> String {
@@ -213,8 +214,14 @@ fn print_setup_instructions(
             plan.service_name
         );
     }
-    println!("Start service: systemctl start {}.service", plan.service_name);
-    println!("Reload after config changes: systemctl reload {}.service", plan.service_name);
+    println!(
+        "Start service: systemctl start {}.service",
+        plan.service_name
+    );
+    println!(
+        "Reload after config changes: systemctl reload {}.service",
+        plan.service_name
+    );
 }
 
 #[cfg(test)]
