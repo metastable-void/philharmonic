@@ -19,7 +19,7 @@ use philharmonic::policy::{
 use philharmonic::server::cli::{BaseArgs, BaseCommand, resolve_config_paths};
 use philharmonic::server::config::{ConfigError, load_config};
 use philharmonic::server::reload::ReloadHandle;
-use philharmonic::store_sqlx_mysql::{SinglePool, SqlStore};
+use philharmonic::store_sqlx_mysql::{SinglePool, SqlStore, migrate};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -104,6 +104,10 @@ async fn serve(args: BaseArgs) -> Result<(), String> {
     let pool = SinglePool::connect(&config.database_url)
         .await
         .map_err(|error| format!("database connection failed: {error}"))?;
+    eprintln!("philharmonic-api: running schema migration");
+    migrate(pool.pool())
+        .await
+        .map_err(|error| format!("schema migration failed: {error}"))?;
     let signing_key = load_signing_key(&config)?;
     let sck_bytes = load_sck_bytes(&config)?;
     let state = LongLivedState {
