@@ -12,6 +12,13 @@ pub struct ApiConfig {
     pub signing_key_path: Option<PathBuf>,
     pub signing_key_kid: Option<String>,
     pub issuer: String,
+    pub lowerer_signing_key_path: Option<PathBuf>,
+    pub lowerer_signing_key_kid: Option<String>,
+    pub lowerer_issuer: Option<String>,
+    #[serde(default = "default_lowerer_token_lifetime_ms")]
+    pub lowerer_token_lifetime_ms: u64,
+    pub realm_public_keys: Vec<RealmPublicKeyConfig>,
+    pub connector_service_url: Option<String>,
     pub verifying_keys: Vec<VerifyingKeyConfig>,
     pub sck_path: Option<PathBuf>,
     pub sck_key_version: i64,
@@ -30,6 +37,12 @@ impl Default for ApiConfig {
             signing_key_path: None,
             signing_key_kid: None,
             issuer: "philharmonic".to_string(),
+            lowerer_signing_key_path: None,
+            lowerer_signing_key_kid: None,
+            lowerer_issuer: None,
+            lowerer_token_lifetime_ms: default_lowerer_token_lifetime_ms(),
+            realm_public_keys: Vec::new(),
+            connector_service_url: None,
             verifying_keys: Vec::new(),
             sck_path: None,
             sck_key_version: 1,
@@ -40,6 +53,18 @@ impl Default for ApiConfig {
             tls: None,
         }
     }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RealmPublicKeyConfig {
+    pub kid: String,
+    pub realm_id: String,
+    pub mlkem_public_key_path: PathBuf,
+    pub x25519_public_key_path: PathBuf,
+    #[serde(default = "default_not_before")]
+    pub not_before: UnixMillis,
+    #[serde(default = "default_not_after")]
+    pub not_after: UnixMillis,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -86,4 +111,8 @@ const fn default_not_before() -> UnixMillis {
 
 const fn default_not_after() -> UnixMillis {
     UnixMillis(i64::MAX)
+}
+
+const fn default_lowerer_token_lifetime_ms() -> u64 {
+    600_000
 }

@@ -42,9 +42,12 @@ connector-email-smtp = ["dep:philharmonic-connector-impl-email-smtp"]
 async-trait = "0.1"
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }
+coset = "0.4"
 hex = "0.4"
 http = "1"
 hyper-util = { version = "0.1", features = ["full"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 rust-embed = "8"
 rustls-pemfile = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }

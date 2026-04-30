@@ -7,10 +7,7 @@ pub struct HeaderBasedScopeResolver;
 
 #[async_trait::async_trait]
 impl RequestScopeResolver for HeaderBasedScopeResolver {
-    async fn resolve(
-        &self,
-        parts: &http::request::Parts,
-    ) -> Result<RequestScope, ResolverError> {
+    async fn resolve(&self, parts: &http::request::Parts) -> Result<RequestScope, ResolverError> {
         let Some(value) = parts.headers.get(TENANT_ID_HEADER) else {
             return Ok(RequestScope::Operator);
         };

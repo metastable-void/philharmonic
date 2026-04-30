@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::process;
 use std::sync::Arc;
@@ -10,6 +11,8 @@ use clap::Parser;
 use philharmonic::api::{
     PhilharmonicApiBuilder, RateLimitBucketConfig, RateLimitConfig, StubExecutor, StubLowerer,
 };
+use philharmonic::connector_client::LowererSigningKey;
+use philharmonic::connector_common::{MLKEM768_PUBLIC_KEY_LEN, RealmId, RealmPublicKey};
 use philharmonic::connector_router::{
     DispatchConfig, HyperForwarder, RouterState, router as connector_router,
 };
@@ -20,20 +23,27 @@ use philharmonic::server::cli::{BaseArgs, BaseCommand, resolve_config_paths};
 use philharmonic::server::config::{ConfigError, load_config};
 use philharmonic::server::reload::ReloadHandle;
 use philharmonic::store_sqlx_mysql::{SinglePool, SqlStore, migrate};
+use philharmonic::workflow::{ConfigLowerer, StepExecutor};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use zeroize::Zeroizing;
 
 mod config;
+mod executor;
+mod lowerer;
 mod scope;
 mod webui;
 
 use config::ApiConfig;
+use executor::HttpStepExecutor;
+use lowerer::ConnectorConfigLowerer;
 use scope::HeaderBasedScopeResolver;
 
 const ED25519_KEY_BYTES: usize = 32;
 const SCK_KEY_BYTES: usize = 32;
+const MLKEM_PUBLIC_KEY_BYTES: usize = MLKEM768_PUBLIC_KEY_LEN;
+const X25519_PUBLIC_KEY_BYTES: usize = 32;
 
 #[derive(Parser)]
 #[command(
@@ -178,6 +188,8 @@ fn build_runtime(config: &ApiConfig, state: &LongLivedState) -> Result<Runtime, 
     let registry = build_verifying_key_registry(&config.verifying_keys)?;
     let connector = build_connector_routes(config)?;
     let rate_limit = build_rate_limit_config(config.rate_limit.as_ref());
+    let step_executor = build_step_executor(config)?;
+    let config_lowerer = build_config_lowerer(config)?;
     let store = SqlStore::new(state.pool.clone());
 
     let mut builder = PhilharmonicApiBuilder::new()
@@ -186,8 +198,8 @@ fn build_runtime(config: &ApiConfig, state: &LongLivedState) -> Result<Runtime, 
         .api_verifying_key_registry(registry)
         .api_signing_key(state.signing_key.clone())
         .issuer(config.issuer.clone())
-        .step_executor(Arc::new(StubExecutor))
-        .config_lowerer(Arc::new(StubLowerer))
+        .step_executor(step_executor)
+        .config_lowerer(config_lowerer)
         .key_version(config.sck_key_version)
         .rate_limit_config(rate_limit);
     if let Some(sck_bytes) = &state.sck_bytes {
@@ -214,8 +226,10 @@ fn build_verifying_key_registry(
 ) -> Result<ApiVerifyingKeyRegistry, String> {
     let mut registry = ApiVerifyingKeyRegistry::new();
     for entry in entries {
-        let key_bytes =
-            read_fixed_key_file::<ED25519_KEY_BYTES>(&entry.public_key_path, "Ed25519 verifying key")?;
+        let key_bytes = read_fixed_key_file::<ED25519_KEY_BYTES>(
+            &entry.public_key_path,
+            "Ed25519 verifying key",
+        )?;
         let vk = VerifyingKey::from_bytes(&key_bytes).map_err(|error| {
             format!(
                 "failed to parse Ed25519 verifying key {}: {error}",
@@ -232,9 +246,96 @@ fn build_verifying_key_registry(
                     not_after: entry.not_after,
                 },
             )
-            .map_err(|error| format!("failed to register API verifying key '{}': {error}", entry.kid))?;
+            .map_err(|error| {
+                format!(
+                    "failed to register API verifying key '{}': {error}",
+                    entry.kid
+                )
+            })?;
     }
     Ok(registry)
+}
+
+fn build_config_lowerer(config: &ApiConfig) -> Result<Arc<dyn ConfigLowerer>, String> {
+    let has_path = config.lowerer_signing_key_path.is_some();
+    let has_kid = config.lowerer_signing_key_kid.is_some();
+    let has_realm_keys = !config.realm_public_keys.is_empty();
+
+    if !(has_path && has_kid && has_realm_keys) {
+        eprintln!("philharmonic-api: lowerer not fully configured, using stub lowerer");
+        return Ok(Arc::new(StubLowerer));
+    }
+
+    let path = config
+        .lowerer_signing_key_path
+        .as_deref()
+        .ok_or_else(|| "lowerer_signing_key_path is required".to_string())?;
+    let kid = config
+        .lowerer_signing_key_kid
+        .clone()
+        .ok_or_else(|| "lowerer_signing_key_kid is required".to_string())?;
+    let seed = read_fixed_secret_file::<ED25519_KEY_BYTES>(path, "lowerer Ed25519 signing seed")?;
+    let signing_key = LowererSigningKey::from_seed(seed, kid);
+    let realm_keys = build_realm_public_keys(&config.realm_public_keys)?;
+    let issuer = config
+        .lowerer_issuer
+        .clone()
+        .unwrap_or_else(|| config.issuer.clone());
+
+    Ok(Arc::new(ConnectorConfigLowerer::new(
+        signing_key,
+        realm_keys,
+        issuer,
+        config.lowerer_token_lifetime_ms,
+    )))
+}
+
+fn build_step_executor(config: &ApiConfig) -> Result<Arc<dyn StepExecutor>, String> {
+    let Some(connector_url) = &config.connector_service_url else {
+        eprintln!("philharmonic-api: connector service URL not configured, using stub executor");
+        return Ok(Arc::new(StubExecutor));
+    };
+
+    Ok(Arc::new(
+        HttpStepExecutor::new(connector_url.clone())
+            .map_err(|error| format!("invalid connector_service_url: {error}"))?,
+    ))
+}
+
+fn build_realm_public_keys(
+    entries: &[config::RealmPublicKeyConfig],
+) -> Result<HashMap<String, RealmPublicKey>, String> {
+    let mut keys = HashMap::with_capacity(entries.len());
+    for entry in entries {
+        let key = read_realm_public_key(entry)?;
+        if keys.insert(entry.realm_id.clone(), key).is_some() {
+            return Err(format!(
+                "duplicate realm public key configured for realm '{}'",
+                entry.realm_id
+            ));
+        }
+    }
+    Ok(keys)
+}
+
+fn read_realm_public_key(entry: &config::RealmPublicKeyConfig) -> Result<RealmPublicKey, String> {
+    let mlkem_public = read_fixed_key_file::<MLKEM_PUBLIC_KEY_BYTES>(
+        &entry.mlkem_public_key_path,
+        "ML-KEM-768 public key",
+    )?;
+    let x25519_public = read_fixed_key_file::<X25519_PUBLIC_KEY_BYTES>(
+        &entry.x25519_public_key_path,
+        "X25519 public key",
+    )?;
+    RealmPublicKey::new(
+        entry.kid.clone(),
+        RealmId::new(entry.realm_id.clone()),
+        mlkem_public.to_vec(),
+        x25519_public,
+        entry.not_before,
+        entry.not_after,
+    )
+    .map_err(|error| format!("failed to build realm public key '{}': {error}", entry.kid))
 }
 
 fn build_connector_routes(config: &ApiConfig) -> Result<Option<Router>, String> {
@@ -319,15 +420,17 @@ fn load_sck_bytes(config: &ApiConfig) -> Result<Option<Zeroizing<[u8; SCK_KEY_BY
 }
 
 fn dynamic_router(state: DynamicRouter) -> Router {
-    Router::new().fallback(any(dispatch_dynamic)).with_state(state)
+    Router::new()
+        .fallback(any(dispatch_dynamic))
+        .with_state(state)
 }
 
 async fn dispatch_dynamic(
     State(state): State<DynamicRouter>,
     request: Request<Body>,
 ) -> Response<Body> {
-    let is_api_path = request.uri().path().starts_with("/v1/")
-        || request.uri().path().starts_with("/connector/");
+    let is_api_path =
+        request.uri().path().starts_with("/v1/") || request.uri().path().starts_with("/connector/");
 
     if is_api_path {
         let router = state.router.read().await.clone();
@@ -499,14 +602,12 @@ fn read_key_file(path: &Path, expected_len: usize) -> Result<Zeroizing<Vec<u8>>,
             .chars()
             .all(|character| character.is_ascii_hexdigit())
     {
-        return hex::decode(&compact)
-            .map(Zeroizing::new)
-            .map_err(|error| {
-                format!(
-                    "failed to decode hex key file {} as {expected_len} bytes: {error}",
-                    path.display()
-                )
-            });
+        return hex::decode(&compact).map(Zeroizing::new).map_err(|error| {
+            format!(
+                "failed to decode hex key file {} as {expected_len} bytes: {error}",
+                path.display()
+            )
+        });
     }
 
     Err(format!(

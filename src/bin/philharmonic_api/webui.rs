@@ -39,7 +39,6 @@ pub async fn webui_fallback(request: Request<Body>) -> Response<Body> {
 
     // SPA fallback: serve index.html for any path that doesn't
     // match a static asset (React Router handles client-side routing).
-    serve_asset("index.html").unwrap_or_else(|| {
-        (StatusCode::NOT_FOUND, "webui not found").into_response()
-    })
+    serve_asset("index.html")
+        .unwrap_or_else(|| (StatusCode::NOT_FOUND, "webui not found").into_response())
 }
