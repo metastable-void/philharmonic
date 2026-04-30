@@ -61,7 +61,7 @@ module.exports = (env, argv) => {
       new HtmlWebpackPlugin({
         template: './src/index.html',
         filename: 'index.html',
-        favicon: '../../common-assets/d-icon.svg',
+        favicon: './src/icon.svg',
       }),
       ...(isProduction
         ? [
