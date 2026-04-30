@@ -1,58 +1,71 @@
 # philharmonic
 
-Philharmonic is a workflow orchestration system built as a family of
-Rust crates. This `philharmonic` crate is a placeholder — it reserves
-the name on crates.io and gives readers a starting point for finding
-the actual components. It does not re-export anything and has no
-runtime dependencies.
+Meta-crate for the Philharmonic workflow orchestration system.
+Re-exports every library crate in the family and provides three
+binary targets for deployment.
 
-## Current component crates
+## What this crate provides
 
-- [`philharmonic-types`](https://crates.io/crates/philharmonic-types) —
-  cornerstone vocabulary: content-addressed JSON, phantom-typed UUID
-  identities, SHA-256 hashes, entity-kind declarations.
-- [`philharmonic-store`](https://crates.io/crates/philharmonic-store) —
-  storage substrate traits: content store, identity store, entity store.
-  Backend-agnostic.
-- `philharmonic-store-sqlx-mysql` — canonical storage implementation
-  against MySQL-family databases (in development).
+### Library re-exports
 
-More crates will appear as the system is built out. See the repository
-for the current state.
+Every published Philharmonic library crate is re-exported at the
+top level so consumers can depend on `philharmonic` alone:
 
-## Why is this crate empty?
+- `philharmonic::types` — cornerstone vocabulary
+- `philharmonic::store` — storage substrate traits
+- `philharmonic::store_sqlx_mysql` — MySQL storage backend
+- `philharmonic::mechanics` / `mechanics_core` / `mechanics_config` — JS execution
+- `philharmonic::policy` — tenants, principals, roles, tokens
+- `philharmonic::workflow` — orchestration engine
+- `philharmonic::connector_common` / `connector_client` / `connector_router` / `connector_service` — connector layer
+- `philharmonic::connector_impl_api` — Implementation trait
+- `philharmonic::api` — HTTP API library
+- Connector implementations (feature-gated, see below)
 
-A workflow orchestration system is not one thing; it's several
-subsystems with distinct concerns (vocabulary, storage, JS execution,
-policy, API, connector routing). Publishing them as separate crates
-lets consumers depend only on what they need, keeps compile times
-reasonable, and lets each subsystem evolve at its own pace.
+### Binary targets
 
-The `philharmonic` name on crates.io will eventually become a
-convenience re-export crate that pulls in the common subset of the
-system. For now, it's reserved.
+Three runnable servers, each with Clap CLI, TOML config file
+loading, SIGHUP-based config reload, and optional TLS:
+
+- **`mechanics-worker`** — JavaScript execution HTTP service.
+- **`philharmonic-connector`** — per-realm connector service
+  (token verification, payload decryption, Implementation
+  dispatch).
+- **`philharmonic-api`** — public API server with embedded
+  WebUI and connector router.
+
+All three support the `install` subcommand for systemd
+deployment and compile for `x86_64-unknown-linux-musl`
+(static linking).
+
+### Feature flags
+
+Connector implementations are feature-gated. All shipped
+implementations are default-on:
+
+- `connector-http-forward` (default)
+- `connector-llm-openai-compat` (default)
+- `connector-sql-postgres` (default)
+- `connector-sql-mysql` (default)
+- `connector-embed` (default)
+- `connector-vector-search` (default)
+- `connector-llm-anthropic` (off, unshipped)
+- `connector-llm-gemini` (off, unshipped)
+- `connector-email-smtp` (off, unshipped)
+- `https` — TLS support for bin targets (rustls)
+
+Use `default-features = false` to pick individually.
 
 ## License
 
-**This crate is dual-licensed under `Apache-2.0 OR MPL-2.0`**;
-either license is sufficient; choose whichever fits your project.
-
-**Rationale**: We generally want our reusable Rust crates to be
-under a license permissive enough to be friendly for the Rust
-community as a whole, while maintaining GPL-2.0 compatibility via
-the MPL-2.0 arm. This is FSF-safer for everyone than `MIT OR Apache-2.0`,
-still being permissive. **This is the standard licensing** for our reusable
-Rust crate projects. Someone's `GPL-2.0-or-later` project should not be
-forced to drop the `GPL-2.0` option because of our crates,
-while `Apache-2.0` is the non-copyleft (permissive) license recommended
-by the FSF, which we base our decisions on.
+Dual-licensed under `Apache-2.0 OR MPL-2.0`; either license
+is sufficient.
 
 ## Contributing
 
 This crate is developed as a submodule of the Philharmonic
-workspace. Workspace-wide development conventions — git workflow,
-script wrappers, Rust code rules, versioning, terminology — live
-in the workspace meta-repo at
-[metastable-void/philharmonic-workspace](https://github.com/metastable-void/philharmonic-workspace),
-authoritatively in its
-[`CONTRIBUTING.md`](https://github.com/metastable-void/philharmonic-workspace/blob/main/CONTRIBUTING.md).
+workspace at
+[metastable-void/philharmonic-workspace](https://github.com/metastable-void/philharmonic-workspace).
+See
+[`CONTRIBUTING.md`](https://github.com/metastable-void/philharmonic-workspace/blob/main/CONTRIBUTING.md)
+for conventions.
