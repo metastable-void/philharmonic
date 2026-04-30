@@ -34,6 +34,7 @@ mod config;
 mod executor;
 mod lowerer;
 mod scope;
+mod security_headers;
 mod webui;
 
 use config::ApiConfig;
@@ -144,7 +145,8 @@ async fn serve(args: BaseArgs) -> Result<(), String> {
     let dynamic = DynamicRouter {
         router: Arc::new(RwLock::new(runtime.router)),
     };
-    let app = dynamic_router(dynamic.clone());
+    let app =
+        dynamic_router(dynamic.clone()).layer(axum::middleware::from_fn(security_headers::inject));
 
     let bind = config.bind;
     let protocol = start_server(app, &config).await?;
