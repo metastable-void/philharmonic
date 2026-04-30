@@ -516,7 +516,7 @@ async fn start_tls_server(
 fn read_tls_server_config(
     tls: &config::TlsFileConfig,
 ) -> Result<tokio_rustls::rustls::ServerConfig, String> {
-    use std::io;
+    use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 
     let cert_bytes = std::fs::read(&tls.cert_path).map_err(|error| {
         format!(
@@ -531,16 +531,16 @@ fn read_tls_server_config(
         )
     })?;
 
-    let cert_chain = rustls_pemfile::certs(&mut io::BufReader::new(cert_bytes.as_slice()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("failed to parse TLS certificate chain: {error}"))?;
+    let cert_chain: Vec<CertificateDer<'static>> =
+        CertificateDer::pem_slice_iter(&cert_bytes)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("failed to parse TLS certificate chain: {error}"))?;
     if cert_chain.is_empty() {
         return Err("failed to parse TLS certificate chain: no certificates found".to_string());
     }
 
-    let private_key = rustls_pemfile::private_key(&mut io::BufReader::new(key_bytes.as_slice()))
-        .map_err(|error| format!("failed to parse TLS private key: {error}"))?
-        .ok_or_else(|| "failed to parse TLS private key: no private key found".to_string())?;
+    let private_key = PrivateKeyDer::from_pem_slice(&key_bytes)
+        .map_err(|error| format!("failed to parse TLS private key: {error}"))?;
 
     let mut config = tokio_rustls::rustls::ServerConfig::builder()
         .with_no_client_auth()

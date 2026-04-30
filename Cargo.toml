@@ -23,7 +23,7 @@ default = [
 ]
 
 # TLS support for bin targets (forwards to mechanics/https).
-https = ["mechanics/https", "dep:rustls-pemfile", "dep:tokio-rustls"]
+https = ["mechanics/https", "dep:tokio-rustls"]
 
 # --- Shipped connector implementations (default-on) ---
 connector-http-forward = ["dep:philharmonic-connector-impl-http-forward"]
@@ -49,7 +49,6 @@ hyper-util = { version = "0.1", features = ["full"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 rust-embed = "8"
-rustls-pemfile = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
