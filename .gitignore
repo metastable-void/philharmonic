@@ -1,4 +1,7 @@
 /target
+/target-main
+/target-xtask
+/target-publish
 /Cargo.lock
 .codex
 .DS_Store
