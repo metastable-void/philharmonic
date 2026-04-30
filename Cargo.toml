@@ -1,7 +1,8 @@
 [package]
 name = "philharmonic"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+autobins = false
 
 description = "Philharmonic workflow orchestration system — meta-crate re-exporting the entire crate family. Depends on all published library crates; feature-gates connector implementations so consumers can pick individually with default-features = false."
 license = "Apache-2.0 OR MPL-2.0"
@@ -22,8 +23,11 @@ default = [
     "connector-vector-search",
 ]
 
-# TLS support for bin targets (forwards to mechanics/https).
-https = ["mechanics/https", "dep:tokio-rustls"]
+# TLS support for consumers that need the mechanics TLS re-export.
+https = ["mechanics/https"]
+
+# Embedded WebUI static assets (SPA fallback handler).
+webui = ["dep:axum", "dep:rust-embed"]
 
 # --- Shipped connector implementations (default-on) ---
 connector-http-forward = ["dep:philharmonic-connector-impl-http-forward"]
@@ -39,24 +43,12 @@ connector-llm-gemini = ["dep:philharmonic-connector-impl-llm-gemini"]
 connector-email-smtp = ["dep:philharmonic-connector-impl-email-smtp"]
 
 [dependencies]
-async-trait = "0.1"
-axum = "0.8"
+axum = { version = "0.8", optional = true }
 clap = { version = "4", features = ["derive"] }
-coset = "0.4"
-hex = "0.4"
-http = "1"
-hyper-util = { version = "0.1", features = ["full"] }
-rand_core = { version = "0.6", features = ["getrandom"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
-rust-embed = "8"
+rust-embed = { version = "8", optional = true }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-tokio-rustls = { version = "0.26", optional = true }
 toml = "0.8"
-tower = "0.5"
-x25519-dalek = { version = "2", features = ["static_secrets"] }
-zeroize = { version = "1", features = ["derive"] }
 
 # Core vocabulary
 philharmonic-types = "0.3.5"
@@ -95,19 +87,7 @@ philharmonic-connector-impl-llm-gemini = { version = "0.0.0", optional = true }
 philharmonic-connector-impl-email-smtp = { version = "0.0.0", optional = true }
 
 # API
-philharmonic-api = "0.1.1"
-
-[[bin]]
-name = "mechanics-worker"
-path = "src/bin/mechanics_worker/main.rs"
-
-[[bin]]
-name = "philharmonic-connector"
-path = "src/bin/philharmonic_connector/main.rs"
-
-[[bin]]
-name = "philharmonic-api"
-path = "src/bin/philharmonic_api/main.rs"
+philharmonic-api = "0.1.2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time"] }

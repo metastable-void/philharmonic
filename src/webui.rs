@@ -30,6 +30,11 @@ fn serve_asset(path: &str) -> Option<Response<Body>> {
     Some(response)
 }
 
+/// Serve embedded WebUI assets with SPA fallback routing.
+///
+/// Paths matching a static asset are served directly; all other
+/// paths return `index.html` so React Router handles client-side
+/// routing.
 pub async fn webui_fallback(request: Request<Body>) -> Response<Body> {
     let path = request.uri().path().trim_start_matches('/');
 
@@ -37,8 +42,6 @@ pub async fn webui_fallback(request: Request<Body>) -> Response<Body> {
         return response;
     }
 
-    // SPA fallback: serve index.html for any path that doesn't
-    // match a static asset (React Router handles client-side routing).
     serve_asset("index.html")
         .unwrap_or_else(|| (StatusCode::NOT_FOUND, "webui not found").into_response())
 }
