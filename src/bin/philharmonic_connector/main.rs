@@ -18,6 +18,7 @@ use philharmonic::connector_service::{
 };
 use philharmonic::server::cli::{BaseArgs, BaseCommand, resolve_config_paths};
 use philharmonic::server::config::{ConfigError, load_config};
+use philharmonic::server::install::{self, InstallPlan};
 use philharmonic::server::reload::ReloadHandle;
 use serde::Serialize;
 use tokio::net::TcpListener;
@@ -33,6 +34,9 @@ const ED25519_VERIFYING_KEY_BYTES: usize = 32;
 const MLKEM_SECRET_KEY_BYTES: usize = 2400;
 const X25519_SECRET_KEY_BYTES: usize = 32;
 const COMBINED_REALM_PRIVATE_KEY_BYTES: usize = MLKEM_SECRET_KEY_BYTES + X25519_SECRET_KEY_BYTES;
+const DEFAULT_CONFIG: &str = r#"bind = "127.0.0.1:3002"
+realm_id = "default"
+"#;
 
 type ImplementationRegistry = HashMap<String, Box<dyn Implementation>>;
 
@@ -104,6 +108,14 @@ async fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         BaseCommand::Serve(args) => serve(args).await,
+        BaseCommand::Install(args) => install::execute_install(&InstallPlan {
+            service_name: "philharmonic-connector".to_string(),
+            binary_name: "philharmonic-connector".to_string(),
+            description: "Philharmonic per-realm connector service".to_string(),
+            config_file_name: "connector.toml".to_string(),
+            default_config_content: DEFAULT_CONFIG.to_string(),
+            args,
+        }),
     }
 }
 

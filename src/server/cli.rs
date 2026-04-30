@@ -24,6 +24,29 @@ pub enum BaseCommand {
     Serve(BaseArgs),
     /// Print version information and exit.
     Version,
+    /// Install the binary, systemd unit, and config directory.
+    ///
+    /// Requires root privileges.
+    Install(InstallArgs),
+}
+
+#[derive(Clone, Debug, clap::Args)]
+pub struct InstallArgs {
+    /// Override the binary install path (default: /usr/local/bin).
+    #[arg(long, default_value = "/usr/local/bin")]
+    pub bin_dir: PathBuf,
+
+    /// Override the systemd unit directory (default: /usr/local/lib/systemd/system).
+    #[arg(long, default_value = "/usr/local/lib/systemd/system")]
+    pub unit_dir: PathBuf,
+
+    /// Override the config directory (default: /etc/philharmonic).
+    #[arg(long, default_value = "/etc/philharmonic")]
+    pub config_dir: PathBuf,
+
+    /// Don't run systemctl enable.
+    #[arg(long)]
+    pub no_enable: bool,
 }
 
 /// Resolve config file paths from CLI args or defaults.
@@ -83,6 +106,22 @@ mod tests {
         let cli = TestCli::parse_from(["test", "version"]);
 
         assert!(matches!(cli.command, BaseCommand::Version));
+    }
+
+    #[test]
+    fn parse_install_defaults() {
+        let cli = TestCli::parse_from(["test", "install"]);
+
+        let BaseCommand::Install(args) = cli.command else {
+            panic!("expected install command");
+        };
+        assert_eq!(args.bin_dir, PathBuf::from("/usr/local/bin"));
+        assert_eq!(
+            args.unit_dir,
+            PathBuf::from("/usr/local/lib/systemd/system")
+        );
+        assert_eq!(args.config_dir, PathBuf::from("/etc/philharmonic"));
+        assert!(!args.no_enable);
     }
 
     #[test]

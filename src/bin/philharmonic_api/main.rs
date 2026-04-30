@@ -21,6 +21,7 @@ use philharmonic::policy::{
 };
 use philharmonic::server::cli::{BaseArgs, BaseCommand, resolve_config_paths};
 use philharmonic::server::config::{ConfigError, load_config};
+use philharmonic::server::install::{self, InstallPlan};
 use philharmonic::server::reload::ReloadHandle;
 use philharmonic::store_sqlx_mysql::{SinglePool, SqlStore, migrate};
 use philharmonic::workflow::{ConfigLowerer, StepExecutor};
@@ -44,6 +45,10 @@ const ED25519_KEY_BYTES: usize = 32;
 const SCK_KEY_BYTES: usize = 32;
 const MLKEM_PUBLIC_KEY_BYTES: usize = MLKEM768_PUBLIC_KEY_LEN;
 const X25519_PUBLIC_KEY_BYTES: usize = 32;
+const DEFAULT_CONFIG: &str = r#"bind = "127.0.0.1:3000"
+database_url = "mysql://philharmonic@localhost/philharmonic"
+issuer = "philharmonic"
+"#;
 
 #[derive(Parser)]
 #[command(
@@ -94,6 +99,14 @@ async fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         BaseCommand::Serve(args) => serve(args).await,
+        BaseCommand::Install(args) => install::execute_install(&InstallPlan {
+            service_name: "philharmonic-api".to_string(),
+            binary_name: "philharmonic-api".to_string(),
+            description: "Philharmonic public API server".to_string(),
+            config_file_name: "api.toml".to_string(),
+            default_config_content: DEFAULT_CONFIG.to_string(),
+            args,
+        }),
     }
 }
 

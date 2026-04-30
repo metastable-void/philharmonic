@@ -8,10 +8,19 @@ use philharmonic::mechanics::{MechanicsPoolConfig, MechanicsServer};
 use philharmonic::mechanics_core::job::MechanicsExecutionLimits;
 use philharmonic::server::cli::{BaseArgs, BaseCommand, resolve_config_paths};
 use philharmonic::server::config::{ConfigError, load_config};
+use philharmonic::server::install::{self, InstallPlan};
 use philharmonic::server::reload::ReloadHandle;
 
 mod config;
 use config::MechanicsWorkerConfig;
+
+const DEFAULT_CONFIG: &str = r#"bind = "127.0.0.1:3001"
+tokens = []
+
+[pool]
+execution_timeout_secs = 3600
+run_timeout_secs = 3600
+"#;
 
 #[derive(Parser)]
 #[command(
@@ -39,6 +48,14 @@ async fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         BaseCommand::Serve(args) => serve(args).await,
+        BaseCommand::Install(args) => install::execute_install(&InstallPlan {
+            service_name: "mechanics-worker".to_string(),
+            binary_name: "mechanics-worker".to_string(),
+            description: "Philharmonic mechanics JS executor".to_string(),
+            config_file_name: "mechanics.toml".to_string(),
+            default_config_content: DEFAULT_CONFIG.to_string(),
+            args,
+        }),
     }
 }
 
